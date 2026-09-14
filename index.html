@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>團課預約</title>
+<script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+  :root{
+    --line-green:#06C755;
+    --line-green-dark:#049c44;
+    --topbar-green:#3f5747;
+    --ink:#2b2a28;
+    --sage:#7c8a72;
+    --sage-light:#eef1ea;
+    --clay:#c98a5e;
+    --clay-light:#f7e9dd;
+    --paper:#faf8f4;
+    --card:#ffffff;
+    --line:#e7e3da;
+    --muted:#8a8579;
+    --danger:#d1573f;
+    --radius:16px;
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);display:flex;justify-content:center;-webkit-font-smoothing:antialiased;}
+  #app{width:100%;max-width:430px;min-height:100vh;background:var(--paper);display:flex;flex-direction:column;}
+
+  .line-topbar{background:var(--topbar-green);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;letter-spacing:1px;}
+
+  header.app-header{background:var(--card);padding:18px 20px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;}
+  .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--sage),var(--clay));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px;flex-shrink:0;}
+  .header-text{flex:1;min-width:0;}
+  .header-text .greet{font-size:13px;color:var(--muted);}
+  .header-text .name{font-size:17px;font-weight:700;letter-spacing:.5px;}
+
+  .credit-card{margin:16px 20px 4px;background:var(--card);border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.04);border:1px solid var(--line);}
+  .credit-split{display:flex;align-items:center;}
+  .credit-stat{flex:1;text-align:center;}
+  .credit-stat .label{font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:4px;}
+  .credit-stat .nums{font-size:13px;color:var(--ink);}
+  .credit-stat .nums b{font-size:24px;color:var(--sage);font-weight:800;}
+  .credit-divider{width:1px;height:36px;background:var(--line);margin:0 14px;flex-shrink:0;}
+  .credit-sub{margin-top:8px;font-size:12px;color:var(--muted);}
+
+  .tabs{display:flex;margin:18px 20px 6px;background:var(--sage-light);border-radius:12px;padding:4px;gap:4px;}
+  .tab-btn{flex:1;border:none;background:transparent;padding:9px 0;font-size:13px;font-weight:600;color:var(--sage);border-radius:9px;cursor:pointer;transition:all .2s;}
+  .tab-btn.active{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+
+  main{flex:1;padding:8px 20px 100px;}
+
+  .day-group{margin-top:18px;}
+  .day-title-row{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px 4px;}
+  .day-title{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;}
+
+  .class-card-wrap{margin-bottom:10px;}
+  .class-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .class-card-wrap:has(.class-desc.open) .class-card{border-radius:14px 14px 0 0;}
+  .info-btn{border:1px solid var(--line);background:var(--paper);color:var(--sage);border-radius:20px;font-size:11.5px;font-weight:600;padding:5px 12px;cursor:pointer;flex-shrink:0;white-space:nowrap;}
+  .class-desc{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease;background:var(--card);border:1px solid var(--line);border-top:none;border-radius:0 0 14px 14px;padding:0 16px;font-size:12.5px;color:var(--muted);line-height:1.7;white-space:pre-wrap;}
+  .class-desc.open{max-height:300px;padding:12px 16px;}
+  .class-info .time{font-size:15px;font-weight:700;color:var(--ink);}
+  .class-info .meta{font-size:12.5px;color:var(--muted);margin-top:3px;}
+  .class-info .meta span{margin-right:8px;}
+  .seat-tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:20px;margin-top:6px;font-weight:600;}
+  .seat-tag.ok{background:var(--sage-light);color:var(--sage);}
+  .seat-tag.low{background:var(--clay-light);color:var(--clay);}
+  .seat-tag.full{background:#f3e4e0;color:var(--danger);}
+
+  .book-btn{border:none;padding:9px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform .1s;}
+  .book-btn:active{transform:scale(0.96);}
+  .book-btn.primary{background:var(--line-green);color:#fff;}
+  .book-btn.primary:hover{background:var(--line-green-dark);}
+  .book-btn.disabled{background:#eee;color:#b0aca2;cursor:not-allowed;}
+  .book-btn.cancel{background:#fff;color:var(--danger);border:1px solid #f0d3cd;}
+  .book-btn.booked{background:var(--sage-light);color:var(--sage);cursor:default;}
+
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+  .empty-state.small{padding:30px 20px;}
+  .empty-state .icon{font-size:34px;margin-bottom:10px;}
+  .empty-state .msg{font-size:14px;line-height:1.6;}
+
+  .history-item{display:flex;justify-content:space-between;align-items:center;padding:12px 4px;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .history-item .h-date{color:var(--muted);font-size:12px;}
+  .history-item .h-type{font-weight:600;}
+  .history-item .h-type.plus{color:var(--sage);}
+  .history-item .h-type.minus{color:var(--danger);}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:30px;font-size:13px;opacity:0;transition:all .3s ease;pointer-events:none;max-width:80%;text-align:center;z-index:50;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(43,42,40,.4);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;z-index:60;}
+  .modal-overlay.show{opacity:1;pointer-events:all;}
+  .modal{width:100%;max-width:430px;background:#fff;border-radius:20px 20px 0 0;padding:22px 22px 28px;transform:translateY(30px);transition:transform .25s;}
+  .modal-overlay.show .modal{transform:translateY(0);}
+
+  #profileReminderOverlay{align-items:center;padding:20px;}
+  #profileReminderOverlay .modal{max-width:380px;border-radius:20px;transform:scale(.92);}
+  #profileReminderOverlay.show .modal{transform:scale(1);}
+
+  /* ---- 公告推播：置中彈窗，跟一般確認用的底部彈窗不同 ---- */
+  #announcementOverlay{align-items:center;padding:20px;}
+  #announcementOverlay .modal{
+    max-width:380px;border-radius:20px;position:relative;
+    transform:scale(.92);max-height:85vh;overflow-y:auto;
+  }
+  #announcementOverlay.show .modal{transform:scale(1);}
+  .announcement-close-x{
+    position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:50%;
+    border:none;background:rgba(0,0,0,.06);color:var(--ink);font-size:13px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;z-index:2;
+  }
+  .announcement-close-x:hover{background:rgba(0,0,0,.12);}
+  #announcementImage{width:100%;border-radius:14px;margin-bottom:14px;display:block;}
+  .modal h3{margin:0 0 6px;font-size:17px;}
+  .modal p{margin:0 0 18px;font-size:13.5px;color:var(--muted);line-height:1.6;white-space:pre-wrap;}
+  .modal-actions{display:flex;gap:10px;}
+  .modal-actions button{flex:1;padding:12px;border-radius:12px;border:none;font-size:14px;font-weight:700;cursor:pointer;}
+  .modal-actions button:disabled{opacity:.6;cursor:not-allowed;}
+  .modal-actions .confirm{background:var(--line-green);color:#fff;}
+  .modal-actions .cancel{background:#f2f0ea;color:var(--ink);}
+
+  /* ---- 行事曆 ---- */
+  .calendar{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 14px 8px;margin-top:14px;}
+  .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:0 2px;}
+  .cal-month-label{font-weight:700;font-size:14.5px;letter-spacing:.5px;}
+  .cal-nav{border:none;background:var(--sage-light);color:var(--sage);width:26px;height:26px;border-radius:50%;font-size:15px;line-height:1;cursor:pointer;}
+  .cal-nav:active{transform:scale(0.92);}
+  .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11px;color:var(--muted);margin-bottom:4px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:2px;}
+  .cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;cursor:pointer;font-size:13px;color:var(--ink);}
+  .cal-cell.empty{cursor:default;}
+  .cal-cell.disabled{color:#d8d4c9;cursor:default;}
+  .cal-dots{display:flex;gap:2.5px;margin-top:3px;}
+  .cal-dot{width:4px;height:4px;border-radius:50%;background:var(--sage);}
+  .cal-dot.open{background:#3fa35e;}
+  .cal-dot.full{background:#d1503a;}
+  .cal-cell.selected{background:var(--line-green);color:#fff;font-weight:700;}
+  .cal-cell.selected .cal-dot.open,
+  .cal-cell.selected .cal-dot.full{background:#fff;opacity:.9;}
+  .cal-cell.today:not(.selected){box-shadow:inset 0 0 0 1.5px var(--sage);font-weight:700;}
+
+  ::-webkit-scrollbar{display:none;}
+
+  #loadingScreen{position:fixed;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:200;}
+  .spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--sage-light);border-top-color:var(--sage);animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #loadingScreen p{font-size:13px;color:var(--muted);margin:0;}
+
+  /* ============ 會員註冊表單 ============ */
+  #registrationScreen{width:100%;max-width:430px;min-height:100vh;background:var(--paper);display:none;flex-direction:column;}
+  #registrationContent{min-width:0;}
+  .reg-back{padding:14px 20px 0;}
+  .reg-back span{cursor:pointer;color:var(--sage);font-size:13px;}
+  .reg-header{padding:20px 20px 4px;}
+  .reg-header h2{margin:0 0 6px;font-size:18px;}
+  .reg-header p{margin:0;font-size:14px;color:var(--muted);line-height:1.6;white-space:pre-wrap;}
+  .reg-body{padding:16px 20px 28px;}
+  .reg-field{margin-bottom:18px;overflow:hidden;}
+  .reg-note{font-size:15px;color:var(--muted);line-height:1.6;white-space:pre-wrap;margin-bottom:18px;}
+  .reg-field label{display:block;font-size:13.5px;font-weight:700;margin-bottom:8px;}
+  .reg-field .req{color:var(--danger);margin-left:2px;}
+  .reg-field input[type="text"], .reg-field input[type="tel"], .reg-field input[type="email"], .reg-field input[type="date"]{
+    width:100%;min-width:0;border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+    font-size:14px;font-family:inherit;background:var(--card);color:var(--ink);box-sizing:border-box;
+  }
+  .reg-field input[type="date"]{
+    -webkit-min-logical-width:0%;
+    max-width:100%;
+    -webkit-appearance:none;appearance:none;
+  }
+  .reg-body{overflow:hidden;}
+  .reg-choice{display:flex;flex-direction:column;gap:8px;}
+  .reg-choice label{
+    display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;
+    padding:11px 14px;font-size:13.5px;font-weight:500;cursor:pointer;background:var(--card);
+  }
+  .reg-choice input{width:16px;height:16px;}
+  .reg-submit{
+    width:100%;border:none;border-radius:26px;padding:14px;font-size:14.5px;font-weight:700;
+    background:var(--line-green);color:#fff;cursor:pointer;
+  }
+  .reg-submit:active{transform:scale(0.98);}
+  .reg-thanks{text-align:center;padding:60px 24px;}
+  .reg-thanks .icon{font-size:44px;margin-bottom:14px;}
+  .reg-thanks h3{margin:0 0 8px;font-size:17px;}
+  .reg-thanks p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.7;}
+  .reg-settings-btn{
+    border:1px solid var(--line);background:var(--paper);color:var(--sage);
+    border-radius:20px;font-size:11.5px;font-weight:600;padding:6px 12px;cursor:pointer;flex-shrink:0;white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <p>正在載入你的資料...</p>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="line-topbar">
+    <span id="topbarStoreName">團課教室</span>
+  </div>
+
+  <header class="app-header">
+    <div class="avatar" id="userAvatar">王</div>
+    <div class="header-text">
+      <div class="greet">你好，</div>
+      <div class="name" id="userName">王小美</div>
+    </div>
+    <button class="reg-settings-btn" id="regSettingsBtn" style="display:none;" onclick="openRegistrationScreen(true)">⚙️ 會員資料設定</button>
+  </header>
+
+  <div class="credit-card">
+    <div class="credit-split">
+      <div class="credit-stat">
+        <div class="label">已預約（尚未完課）</div>
+        <div class="nums"><b id="creditBooked">0</b> 堂</div>
+      </div>
+      <div class="credit-divider"></div>
+      <div class="credit-stat">
+        <div class="label">剩餘堂數</div>
+        <div class="nums"><b id="creditRemaining">0</b> 堂</div>
+      </div>
+    </div>
+    <div class="credit-sub" id="creditSub"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="book">預約課程</button>
+    <button class="tab-btn" data-tab="mine">我的課表</button>
+    <button class="tab-btn" data-tab="creditExpiry">堂數期限</button>
+    <button class="tab-btn" data-tab="about">關於我們</button>
+  </div>
+
+  <main id="mainContent"></main>
+</div>
+
+<div id="registrationScreen">
+  <div class="line-topbar" id="regTopbar">會員註冊</div>
+  <div id="registrationContent"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">確認預約</h3>
+    <p id="modalBody"></p>
+    <div class="modal-actions">
+      <button class="cancel" id="modalCancelBtn">先不要</button>
+      <button class="confirm" id="modalConfirmBtn">確認</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="profileReminderOverlay">
+  <div class="modal">
+    <h3>尚未儲存</h3>
+    <p>你有修改過的資料尚未儲存，請記得按下方的「儲存變更」按鈕。</p>
+    <div class="modal-actions">
+      <button class="cancel" onclick="profileReminderLeave()">確定不儲存</button>
+      <button class="confirm" onclick="profileReminderGoSave()">前往最下方按儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="announcementOverlay">
+  <div class="modal announcement-modal">
+    <button class="announcement-close-x" onclick="closeAnnouncement()" aria-label="關閉">✕</button>
+    <img id="announcementImage" src="" style="display:none;">
+    <h3 id="announcementTitle"></h3>
+    <p id="announcementBody" style="white-space:pre-wrap;"></p>
+    <div class="modal-actions">
+      <button class="confirm" id="announcementCloseBtn" onclick="closeAnnouncement()" style="width:100%;">我知道了</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ 外觀主題 ============ */
+const THEMES = {
+  sage:      { name:'鼠尾草綠', sage:'#7c8a72', sageLight:'#eef1ea', sageDark:'#3f5a3c', clay:'#c98a5e', clayLight:'#f7e9dd', accent:'#06C755', topbar:'#3f5747' },
+  ocean:     { name:'海洋藍',   sage:'#5b7f95', sageLight:'#e8f1f5', sageDark:'#2c4a5c', clay:'#d9a05b', clayLight:'#faf0e0', accent:'#2f8fb5', topbar:'#2c4a5c' },
+  lavender:  { name:'薰衣草紫', sage:'#8b7ca8', sageLight:'#f0ecf7', sageDark:'#4f3f6b', clay:'#d98fa0', clayLight:'#fbe9ed', accent:'#8b6bb5', topbar:'#4f3f6b' },
+  sunset:    { name:'夕陽橘',   sage:'#c17a4e', sageLight:'#fbeee3', sageDark:'#7a4223', clay:'#e0a15c', clayLight:'#fdf1de', accent:'#d97a3f', topbar:'#7a4223' },
+  forest:    { name:'深林綠',   sage:'#4f6b4f', sageLight:'#e6ede6', sageDark:'#263a26', clay:'#8a7048', clayLight:'#f0e8d8', accent:'#3f6b3f', topbar:'#263a26' },
+  rose:      { name:'玫瑰豆沙', sage:'#a17c85', sageLight:'#f5eced', sageDark:'#5c3a40', clay:'#c99a8a', clayLight:'#f7ede6', accent:'#a85f6e', topbar:'#5c3a40' },
+  slate:     { name:'石墨灰',   sage:'#6b7480', sageLight:'#eef0f2', sageDark:'#33373d', clay:'#8f8a7d', clayLight:'#f2efe8', accent:'#556270', topbar:'#33373d' }
+};
+function applyTheme(themeName){
+  const t = THEMES[themeName] || THEMES.sage;
+  const root = document.documentElement.style;
+  root.setProperty('--sage', t.sage);
+  root.setProperty('--sage-light', t.sageLight);
+  root.setProperty('--clay', t.clay);
+  root.setProperty('--clay-light', t.clayLight);
+  root.setProperty('--line-green', t.accent);
+  root.setProperty('--line-green-dark', t.accent);
+  root.setProperty('--topbar-green', t.topbar);
+}
+
+/* ============ Supabase 連線設定（實際數值放在 config.js，不進版控） ============ */
+const SUPABASE_URL = window.APP_CONFIG.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.APP_CONFIG.SUPABASE_ANON_KEY;
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ============ LIFF 設定 ============ */
+const LIFF_ID = window.APP_CONFIG.LIFF_ID;
+let lineProfile = { userId: 'demo-user', displayName: '王小美', pictureUrl: null };
+let isDemoMode = true;
+
+async function initLiff(){
+  try{
+    await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()){
+      liff.login();
+      return false;
+    }
+    const profile = await liff.getProfile();
+    lineProfile = profile;
+    isDemoMode = false;
+    return true;
+  }catch(e){
+    console.warn('LIFF 初始化失敗，改用示範模式資料：', e);
+    isDemoMode = true;
+    return false;
+  }
+}
+
+/* ============ 資料狀態 ============ */
+let state = {
+  storeName: '團課教室',
+  creditsRemaining: 0,
+  creditsTotal: 0,
+  templates: [],      // 課程範本（來自 class_templates）
+  schedule: [],        // 依範本展開出的課表
+  scheduleByKey: new Map(),
+  allClasses: [],
+  overrides: [],        // 後台設定的單日停課／加開特別課
+  seatsMap: {},        // class_key -> 目前已預約人數
+  myBookings: [],       // 這個學生的所有預約（含已取消）
+  creditBatches: [],    // 這個學生的堂數批次（各自效期，用於「查看點數紀錄」）
+  bookingWindowDays: 30,   // 開放預約的天數（沒設定明確區間時的備用規則）
+  bookingOpenStart: null,  // 後台指定的開放預約開始日期（YYYY-MM-DD）
+  bookingOpenEnd: null,    // 後台指定的開放預約結束日期（YYYY-MM-DD）
+  cancelDeadlineMinutes: 60, // 上課前幾分鐘內不可取消（由後台設定）
+  registrationFormStatus: 'draft', // 會員註冊表單是否已啟用
+  registrationQuestions: [],       // 啟用中的註冊問題
+  registrationFieldOrder: [],      // 後台設定的欄位顯示順序（姓名／e-mail／各問題統一排序）
+  registrationSubmittedAt: null,   // 這個學員填過註冊表單的時間（null＝還沒填過＝新學員）
+  registrationName: '',
+  registrationContact: '',
+  registrationAnswers: {},
+  registrationShowName: true,      // 表單要不要顯示固定的「姓名」欄位（後台可以關掉，改用自訂問題）
+  registrationShowContact: true,   // 表單要不要顯示固定的「e-mail」欄位
+  registrationNameRequired: true,  // 姓名是否為必填
+  registrationContactRequired: true, // e-mail 是否為必填
+  editProfileNote: '',
+  aboutImage: '',
+  aboutText: '',
+  aboutLinks: []
+};
+
+let activeTab = 'book';
+let calendarView = null;
+let selectedDateKey = null;
+
+const WEEKDAY_LABELS = ['日','一','二','三','四','五','六'];
+
+/* ============ 讀取資料 ============ */
+async function loadPublicSettings(){
+  const { data, error } = await db.rpc('get_store_public_settings');
+  if(!error && data){
+    state.storeName = data.name;
+    state.registrationFormStatus = data.registration_form_status || 'draft';
+    state.registrationShowName = data.registration_show_name !== false;
+    state.registrationShowContact = data.registration_show_contact !== false;
+    applyTheme(data.theme || 'sage');
+    state.announcementEnabled = !!data.announcement_enabled;
+    state.announcementTitle = data.announcement_title || '';
+    state.announcementContent = data.announcement_content || '';
+    state.announcementImage = data.announcement_image || '';
+    if(Array.isArray(data.registration_field_order)) state.registrationFieldOrder = data.registration_field_order;
+    state.registrationNameRequired = data.registration_name_required !== false;
+    state.registrationContactRequired = data.registration_contact_required !== false;
+    state.editProfileNote = data.edit_profile_note || '';
+    state.aboutImage = data.about_image || '';
+    state.aboutText = data.about_text || '';
+    state.aboutLinks = Array.isArray(data.about_links) ? data.about_links : [];
+  }
+}
+
+async function loadRegistrationQuestions(){
+  const { data, error } = await db.from('registration_questions')
+    .select('*').eq('active', true).order('sort_order');
+  state.registrationQuestions = (!error && data) ? data : [];
+}
+
+async function loadBookingRules(){
+  const { data, error } = await db.rpc('get_booking_rules');
+  if(!error && data){
+    if(data.booking_window_days) state.bookingWindowDays = data.booking_window_days;
+    if(data.cancel_deadline_minutes !== null && data.cancel_deadline_minutes !== undefined){
+      state.cancelDeadlineMinutes = data.cancel_deadline_minutes;
+    }
+    state.bookingOpenStart = data.booking_open_start || null;
+    state.bookingOpenEnd = data.booking_open_end || null;
+  }
+}
+
+function overrideDateKey(isoDateStr){
+  const [y,m,d] = isoDateStr.split('-').map(Number);
+  return `${y}-${m}-${d}`;
+}
+
+async function loadOverrides(){
+  const { data, error } = await db.from('class_overrides').select('*');
+  state.overrides = (!error && data) ? data : [];
+}
+
+async function loadTemplatesAndSchedule(){
+  const { data, error } = await db.from('class_templates').select('*').eq('active', true);
+  state.templates = (!error && data) ? data : [];
+  buildSchedule();
+}
+
+function buildSchedule(){
+  const days = [];
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const cancelSet = new Set(
+    state.overrides.filter(o=>o.type==='cancel').map(o=>`${overrideDateKey(o.date)}_${o.class_template_id}`)
+  );
+  const extrasByDateKey = {};
+  state.overrides.filter(o=>o.type==='extra').forEach(o=>{
+    const key = overrideDateKey(o.date);
+    (extrasByDateKey[key] = extrasByDateKey[key] || []).push(o);
+  });
+  const modifyMap = {};
+  state.overrides.filter(o=>o.type==='modify').forEach(o=>{
+    modifyMap[`${overrideDateKey(o.date)}_${o.class_template_id}`] = o;
+  });
+
+  let rangeStart, rangeEnd;
+  if(state.bookingOpenStart && state.bookingOpenEnd){
+    // 後台有指定明確的開放區間，就只產生這段區間內的課表
+    const [sy,sm,sd] = state.bookingOpenStart.split('-').map(Number);
+    const [ey,em,ed] = state.bookingOpenEnd.split('-').map(Number);
+    rangeStart = new Date(sy, sm-1, sd);
+    rangeEnd = new Date(ey, em-1, ed);
+    if(rangeStart < today) rangeStart = new Date(today); // 開始日期如果已經過了，就從今天開始算
+  } else {
+    // 沒有設定明確區間，退回舊規則：從明天開始，往後 N 天
+    rangeStart = new Date(today); rangeStart.setDate(today.getDate()+1);
+    rangeEnd = new Date(today); rangeEnd.setDate(today.getDate() + (state.bookingWindowDays || 30));
+  }
+
+  for(let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate()+1)){
+    const weekdayLabel = WEEKDAY_LABELS[d.getDay()];
+    const year = d.getFullYear(), month = d.getMonth()+1, day = d.getDate();
+    const dateKey = `${year}-${month}-${day}`;
+    const isoDate = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dateStr = `${month}/${day} (週${weekdayLabel})`;
+
+    let dayClasses = state.templates
+      .filter(t => Array.isArray(t.weekdays) && t.weekdays.includes(weekdayLabel))
+      .filter(t => !cancelSet.has(`${dateKey}_${t.id}`))
+      .filter(t => (!t.start_date || isoDate >= t.start_date) && (!t.end_date || isoDate <= t.end_date)) // 這天被後台停開的課，不顯示
+      .map(t => {
+        const mod = modifyMap[`${dateKey}_${t.id}`];
+        return {
+          classKey: `${dateKey}_${t.id}`,
+          templateId: t.id,
+          date: dateStr, dateKey, year, month, day,
+          time: mod ? mod.time : t.time,
+          title: mod ? mod.title : t.title,
+          teacher: mod ? mod.teacher : t.teacher,
+          cap: mod ? mod.cap : t.cap,
+          location: mod ? (mod.location||'') : (t.location||''),
+          description: mod ? (mod.description||'') : (t.description||'')
+        };
+      });
+
+    // 加入這天後台加開的特別課
+    const extras = (extrasByDateKey[dateKey] || []).map(o => ({
+      classKey: `${dateKey}_extra_${o.id}`,
+      templateId: null,
+      date: dateStr, dateKey, year, month, day,
+      time: o.time, title: o.title, teacher: o.teacher, cap: o.cap, location: o.location||'', description: o.description||'',
+      isExtra: true
+    }));
+    dayClasses = dayClasses.concat(extras).sort((a,b)=>a.time.localeCompare(b.time));
+
+    days.push({ dateStr, dateKey, year, month, day, classes: dayClasses });
+  }
+  state.schedule = days;
+  state.allClasses = days.flatMap(d => d.classes);
+  state.scheduleByKey = new Map(days.map(d => [d.dateKey, d]));
+
+  const firstUpcoming = days.find(d => d.classes.length>0) || days[0] || null;
+  if(firstUpcoming){
+    calendarView = { year: firstUpcoming.year, month: firstUpcoming.month };
+    selectedDateKey = firstUpcoming.dateKey;
+  } else {
+    // 極端情況：完全沒有任何一天（例如區間設反了），給個保底避免畫面壞掉
+    calendarView = { year: today.getFullYear(), month: today.getMonth()+1 };
+    selectedDateKey = null;
+  }
+}
+
+async function loadSeatsMap(){
+  const { data, error } = await db.rpc('get_class_seat_counts');
+  const map = {};
+  if(!error && data){
+    data.forEach(row => { map[row.class_key] = Number(row.booked_count); });
+  }
+  state.seatsMap = map;
+}
+
+/* ============ 堂數批次系統（每批各自效期） ============ */
+async function sweepExpiredCredits(lineUserId){
+  const todayStr = new Date().toISOString().slice(0,10);
+  const { data: expired, error } = await db.from('credit_batches')
+    .select('id, remaining')
+    .eq('line_user_id', lineUserId)
+    .gt('remaining', 0)
+    .not('expires_at', 'is', null)
+    .lt('expires_at', todayStr);
+  if(error || !expired || expired.length===0) return;
+
+  const totalExpired = expired.reduce((s,b)=>s+b.remaining, 0);
+  if(totalExpired<=0) return;
+
+  await db.from('credit_batches').update({ remaining: 0 }).in('id', expired.map(b=>b.id));
+
+  const { data: m } = await db.from('members').select('remaining_credits').eq('line_user_id', lineUserId).single();
+  const newRemaining = Math.max(0, (m ? m.remaining_credits : 0) - totalExpired);
+  await db.from('members').update({ remaining_credits: newRemaining }).eq('line_user_id', lineUserId);
+}
+
+async function consumeOneCredit(lineUserId){
+  // 依效期排序（最快到期的先扣），找出可以扣的那一批
+  const { data: batches, error } = await db.from('credit_batches')
+    .select('id, remaining, expires_at')
+    .eq('line_user_id', lineUserId)
+    .gt('remaining', 0)
+    .order('expires_at', { ascending: true, nullsFirst: false });
+  if(error || !batches || batches.length===0) return null; // 找不到批次（舊資料），呼叫端會退回直接扣 members 總數
+
+  const batch = batches[0];
+  await db.from('credit_batches').update({ remaining: batch.remaining - 1 }).eq('id', batch.id);
+  return batch.id;
+}
+
+async function refundOneCredit(lineUserId, batchId){
+  if(!batchId) return;
+  const { data: batch } = await db.from('credit_batches').select('remaining').eq('id', batchId).single();
+  if(batch){
+    await db.from('credit_batches').update({ remaining: batch.remaining + 1 }).eq('id', batchId);
+  }
+}
+
+async function ensureMemberAndLoadCredits(){
+  // 確保這個 LINE 使用者在 members 表裡有一筆資料（沒有的話建立），並同步最新的姓名、頭貼
+  await db.from('members').upsert(
+    { line_user_id: lineProfile.userId, display_name: lineProfile.displayName, picture_url: lineProfile.pictureUrl || null },
+    { onConflict: 'line_user_id' }
+  );
+
+  await sweepExpiredCredits(lineProfile.userId); // 先把過期的批次歸零、同步扣掉總數
+
+  const { data, error } = await db.from('members')
+    .select('remaining_credits, total_credits, registration_submitted_at, registration_name, registration_contact, registration_answers')
+    .eq('line_user_id', lineProfile.userId).single();
+
+  state.creditsRemaining = (!error && data) ? data.remaining_credits : 0;
+  state.creditsTotal = (!error && data) ? (data.total_credits || 0) : 0;
+  state.registrationSubmittedAt = (!error && data) ? data.registration_submitted_at : null;
+  state.registrationName = (!error && data && data.registration_name) || '';
+  state.registrationContact = (!error && data && data.registration_contact) || '';
+  state.registrationAnswers = (!error && data && data.registration_answers) || {};
+}
+
+async function loadMyBookings(){
+  const { data, error } = await db.from('bookings')
+    .select('*')
+    .eq('line_user_id', lineProfile.userId)
+    .order('created_at', { ascending: false });
+  state.myBookings = (!error && data) ? data : [];
+}
+
+async function loadMyCreditBatches(){
+  const { data, error } = await db.from('credit_batches')
+    .select('*')
+    .eq('line_user_id', lineProfile.userId)
+    .order('expires_at', { ascending: true, nullsFirst: false });
+  state.creditBatches = (!error && data) ? data : [];
+}
+
+async function loadAll(){
+  await Promise.all([ loadBookingRules(), loadOverrides() ]);
+  await Promise.all([
+    loadPublicSettings(),
+    loadRegistrationQuestions(),
+    loadTemplatesAndSchedule().then(loadSeatsMap),
+    ensureMemberAndLoadCredits()
+  ]);
+  await Promise.all([ loadMyBookings(), loadMyCreditBatches() ]);
+}
+
+/* ============ 畫面渲染 ============ */
+function seatsBooked(classKey){ return state.seatsMap[classKey] || 0; }
+
+function classCardHTML(c){
+  const booked = seatsBooked(c.classKey);
+  const remain = c.cap - booked;
+  const already = state.myBookings.some(b => b.class_key===c.classKey && b.status==='active');
+
+  const classStart = new Date(c.year, c.month-1, c.day, ...c.time.split(':').map(Number));
+  const hasStarted = classStart <= new Date();
+
+  let tagClass='ok', tagText=`尚有 ${remain} 個名額`;
+  if(hasStarted){ tagClass='full'; tagText='已截止預約'; }
+  else if(remain<=0){ tagClass='full'; tagText='已額滿'; }
+  else if(remain<=3){ tagClass='low'; tagText=`剩 ${remain} 位，快滿囉`; }
+
+  let btn;
+  if(hasStarted && !already){
+    btn = `<button class="book-btn disabled" disabled>已截止</button>`;
+  } else if(already){
+    btn = `<button class="book-btn booked" disabled>已預約 ✓</button>`;
+  } else if(remain<=0){
+    btn = `<button class="book-btn disabled" disabled>已額滿</button>`;
+  } else if(state.creditsRemaining<=0){
+    btn = `<button class="book-btn disabled" disabled>堂數不足</button>`;
+  } else {
+    btn = `<button class="book-btn primary" onclick="openBookModal('${c.classKey}')">預約</button>`;
+  }
+
+  const infoBtn = c.description
+    ? `<button class="info-btn" onclick="toggleDescription('${c.classKey}')">課程介紹</button>`
+    : '';
+
+  return `
+    <div class="class-card-wrap">
+      <div class="class-card">
+        <div class="class-info">
+          <div class="time">${c.time}　${c.title}</div>
+          <div class="meta"><span>👤 ${c.teacher} 老師</span></div>
+          ${c.location ? `<div class="meta"><span>📍${c.location}</span></div>` : ''}
+          <span class="seat-tag ${tagClass}">${tagText}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+          ${btn}
+          ${infoBtn}
+        </div>
+      </div>
+      ${c.description ? `<div class="class-desc" id="desc-${c.classKey}">${c.description}</div>` : ''}
+    </div>`;
+}
+
+function toggleDescription(classKey){
+  const el = document.getElementById(`desc-${classKey}`);
+  if(el) el.classList.toggle('open');
+}
+
+function buildCalendarHTML(){
+  const { year, month } = calendarView;
+  const startWeekday = new Date(year, month-1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const now = new Date(); now.setHours(0,0,0,0);
+  const todayKey = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
+
+  let cells = '';
+  for(let i=0;i<startWeekday;i++) cells += `<div class="cal-cell empty"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const key = `${year}-${month}-${day}`;
+    const info = state.scheduleByKey.get(key);
+    const cellDate = new Date(year, month-1, day);
+    const isPast = cellDate < now;
+    const isSelected = key===selectedDateKey;
+    const isToday = key===todayKey;
+    let cls = 'cal-cell';
+    if(isSelected) cls += ' selected';
+    if(isToday) cls += ' today';
+    if(isPast || !info) cls += ' disabled';
+
+    let dotsHtml = '';
+    if(info && !isPast && info.classes.length>0){
+      dotsHtml = `<span class="cal-dots">${info.classes.map(c=>{
+        const isFull = seatsBooked(c.classKey) >= c.cap;
+        return `<span class="cal-dot ${isFull ? 'full' : 'open'}"></span>`;
+      }).join('')}</span>`;
+    }
+
+    cells += `<div class="${cls}" ${(!isPast && info) ? `onclick="selectDate('${key}')"` : ''}>
+        <span>${day}</span>${dotsHtml}
+      </div>`;
+  }
+
+  return `
+    <div class="calendar">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="changeMonth(-1)">‹</button>
+        <span class="cal-month-label">${year} 年 ${month} 月</span>
+        <button class="cal-nav" onclick="changeMonth(1)">›</button>
+      </div>
+      <div class="cal-weekdays">${WEEKDAY_LABELS.map(w=>`<span>${w}</span>`).join('')}</div>
+      <div class="cal-grid">${cells}</div>
+    </div>`;
+}
+
+function changeMonth(delta){
+  let { year, month } = calendarView;
+  month += delta;
+  if(month<1){ month=12; year--; }
+  if(month>12){ month=1; year++; }
+  calendarView = { year, month };
+  render();
+}
+function selectDate(key){
+  selectedDateKey = key;
+  const info = state.scheduleByKey.get(key);
+  if(info) calendarView = { year: info.year, month: info.month };
+  render();
+}
+
+function renderBookTab(){
+  let html = buildCalendarHTML();
+  const day = selectedDateKey ? state.scheduleByKey.get(selectedDateKey) : null;
+  if(!day){
+    html += `<div class="empty-state small"><div class="icon">🗓️</div><div class="msg">請在上方行事曆選擇一個日期</div></div>`;
+    return html;
+  }
+  html += `<div class="day-group"><div class="day-title-row"><span class="day-title">${day.dateStr}</span></div>`;
+  if(day.classes.length===0){
+    html += `<div class="empty-state small"><div class="icon">🧘‍♀️</div><div class="msg">這天沒有開課，換個日期看看吧</div></div>`;
+  } else {
+    day.classes.forEach(c => { html += classCardHTML(c); });
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderMineTab(){
+  const mine = state.myBookings
+    .filter(b => b.status==='active')
+    .map(b => ({ ...b, cls: state.allClasses.find(c => c.classKey===b.class_key) }))
+    .sort((a,b) => (a.class_date_iso||'').localeCompare(b.class_date_iso||'') || (a.class_time||'').localeCompare(b.class_time||''));
+
+  if(mine.length===0){
+    return `<div class="empty-state"><div class="icon">📭</div><div class="msg">目前沒有已預約的課程<br>去「預約課程」頁面挑一堂喜歡的吧</div></div>`;
+  }
+  let html = `<div class="day-group"><div class="day-title">已預約課程</div>`;
+  mine.forEach(b => {
+    const date = b.cls ? b.cls.date : (b.class_date || '');
+    const time = b.cls ? b.cls.time : (b.class_time || '');
+    const title = b.cls ? b.cls.title : (b.class_title || '');
+    const teacher = b.cls ? b.cls.teacher : (b.teacher || '');
+    const location = b.cls ? (b.cls.location||'') : '';
+    html += `
+      <div class="class-card" style="margin-bottom:10px;">
+        <div class="class-info">
+          <div class="time">${date}　${time}</div>
+          <div class="time">${title}</div>
+          <div class="meta"><span>👤 ${teacher} 老師</span></div>
+          ${location ? `<div class="meta"><span>📍${location}</span></div>` : ''}
+        </div>
+        <button class="book-btn cancel" onclick="openCancelModal('${b.id}')">取消</button>
+      </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderHistoryTab(){
+  if(state.myBookings.length===0){
+    return `<div class="empty-state"><div class="icon">📒</div><div class="msg">尚無堂數異動紀錄</div></div>`;
+  }
+  let html = `<div class="day-group"><div class="day-title">堂數異動紀錄</div>`;
+  state.myBookings.forEach(b => {
+    const isCancelled = b.status==='cancelled';
+    html += `
+      <div class="history-item">
+        <div>
+          <div>${isCancelled ? '取消' : '預約'}「${b.class_title}」</div>
+          <div class="h-date">${b.class_date} ${b.class_time}</div>
+        </div>
+        <div class="h-type ${isCancelled?'plus':'minus'}">${isCancelled?'+1':'-1'} 堂</div>
+      </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderCreditCard(){
+  const todayIso = new Date().toISOString().slice(0,10);
+  const bookedCount = state.myBookings.filter(b => b.status==='active' && b.class_date_iso && b.class_date_iso >= todayIso).length;
+  document.getElementById('creditBooked').textContent = bookedCount;
+  document.getElementById('creditRemaining').textContent = state.creditsRemaining;
+  const sub = document.getElementById('creditSub');
+  if(state.creditsRemaining<=0){
+    sub.textContent = '你好棒！把堂數都用完，給自己大大的掌聲吧！';
+    sub.style.display = 'block';
+  } else {
+    sub.textContent = '';
+    sub.style.display = 'none';
+  }
+}
+
+/* ============ 堂數期限（分頁） ============ */
+function renderCreditExpiryTab(){
+  if(state.creditBatches.length===0){
+    return `<div class="empty-state"><div class="icon">🗓️</div><div class="msg">目前沒有堂數紀錄</div></div>`;
+  }
+  const todayStr = new Date().toISOString().slice(0,10);
+  let html = `<div class="day-group"><div class="day-title">堂數期限</div>`;
+  state.creditBatches.forEach(b=>{
+    const isExpired = b.expires_at && b.expires_at < todayStr;
+    const expiryLabel = b.expires_at
+      ? (isExpired ? `已過期（${b.expires_at}）` : `效期至 ${b.expires_at}`)
+      : '永久有效';
+    html += `
+      <div class="history-item">
+        <div>
+          <div class="h-type">新增 ${b.amount} 堂</div>
+          <div class="h-date">${expiryLabel}</div>
+        </div>
+        <div class="h-type ${isExpired ? 'minus' : 'plus'}">剩 ${b.remaining} 堂</div>
+      </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderAboutTab(){
+  let html = '<div style="padding:8px 24px;">';
+  if(state.aboutImage){
+    html += `<div style="text-align:center;margin-bottom:16px;"><img src="${state.aboutImage}" style="max-width:100%;border-radius:14px;"></div>`;
+  }
+  if(state.aboutText){
+    html += `<div style="font-size:14px;line-height:1.8;color:var(--ink);white-space:pre-wrap;margin-bottom:20px;">${state.aboutText}</div>`;
+  }
+  if(state.aboutLinks.length){
+    html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+    state.aboutLinks.forEach(link=>{
+      html += `<a href="${link.url}" target="_blank" rel="noopener" style="display:block;text-align:center;padding:13px 16px;border-radius:12px;background:var(--sage);color:#fff;font-weight:600;font-size:14px;text-decoration:none;transition:opacity .15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">${link.label}</a>`;
+    });
+    html += '</div>';
+  }
+  if(!state.aboutImage && !state.aboutText && !state.aboutLinks.length){
+    html += '<div class="empty-state"><div class="icon">🏠</div><div class="msg">尚未設定關於我們的內容</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderUserInfo(){
+  document.getElementById('userName').textContent = lineProfile.displayName;
+  const avatarEl = document.getElementById('userAvatar');
+  if(lineProfile.pictureUrl){
+    avatarEl.style.backgroundImage = `url(${lineProfile.pictureUrl})`;
+    avatarEl.style.backgroundSize = 'cover';
+    avatarEl.style.backgroundPosition = 'center';
+    avatarEl.textContent = '';
+  } else {
+    avatarEl.style.backgroundImage = 'none';
+    avatarEl.textContent = lineProfile.displayName ? lineProfile.displayName[0] : '?';
+  }
+}
+
+function render(){
+  document.getElementById('topbarStoreName').textContent = state.storeName;
+  renderUserInfo();
+  renderCreditCard();
+  const main = document.getElementById('mainContent');
+  if(activeTab==='book') main.innerHTML = renderBookTab();
+  else if(activeTab==='mine') main.innerHTML = renderMineTab();
+  else if(activeTab==='creditExpiry') main.innerHTML = renderCreditExpiryTab();
+  else if(activeTab==='about') main.innerHTML = renderAboutTab();
+  else main.innerHTML = renderBookTab();
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    activeTab = btn.dataset.tab;
+    render();
+  });
+});
+
+/* ============ Toast ============ */
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ============ Modal ============ */
+const overlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const confirmBtn = document.getElementById('modalConfirmBtn');
+const cancelBtn = document.getElementById('modalCancelBtn');
+let pendingAction = null;
+
+function openModal(title, body, onConfirm, confirmLabel){
+  modalTitle.textContent = title;
+  modalBody.textContent = body;
+  confirmBtn.textContent = confirmLabel || '確認';
+  pendingAction = onConfirm;
+  overlay.classList.add('show');
+}
+function closeModal(){ overlay.classList.remove('show'); pendingAction=null; }
+
+function maybeShowAnnouncement(){
+  if(!state.announcementEnabled || !state.announcementContent) return;
+  document.getElementById('announcementTitle').textContent = state.announcementTitle || '公告';
+  document.getElementById('announcementBody').textContent = state.announcementContent;
+  const imgEl = document.getElementById('announcementImage');
+  if(state.announcementImage){
+    imgEl.src = state.announcementImage;
+    imgEl.style.display = 'block';
+  } else {
+    imgEl.style.display = 'none';
+  }
+  document.getElementById('announcementOverlay').classList.add('show');
+}
+function closeAnnouncement(){
+  document.getElementById('announcementOverlay').classList.remove('show');
+}
+cancelBtn.addEventListener('click', closeModal);
+overlay.addEventListener('click', e=>{ if(e.target===overlay) closeModal(); });
+confirmBtn.addEventListener('click', async ()=>{
+  if(!pendingAction || confirmBtn.disabled) return;
+  confirmBtn.disabled = true;
+  const originalText = confirmBtn.textContent;
+  confirmBtn.textContent = '處理中...';
+  try{
+    await pendingAction();
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
+  }
+  closeModal();
+});
+
+function openBookModal(classKey){
+  const c = state.allClasses.find(x=>x.classKey===classKey);
+  openModal('確認預約課程',
+    `${c.date} ${c.time}　${c.title}（${c.teacher} 老師）\n將扣除 1 堂課，確定要預約嗎？`,
+    async ()=>{ await bookClass(c); }, '確認預約');
+}
+function openCancelModal(bookingId){
+  const b = state.myBookings.find(x=>x.id===bookingId);
+  if(!b) return;
+
+  const cls = state.allClasses.find(c => c.classKey===b.class_key);
+  if(cls){
+    const classStart = new Date(cls.year, cls.month-1, cls.day, ...cls.time.split(':').map(Number));
+    const minutesUntilClass = (classStart - new Date()) / 60000;
+    if(minutesUntilClass < state.cancelDeadlineMinutes){
+      const label = state.cancelDeadlineMinutes >= 60
+        ? `${(state.cancelDeadlineMinutes/60).toFixed(state.cancelDeadlineMinutes%60===0?0:1)} 小時`
+        : `${state.cancelDeadlineMinutes} 分鐘`;
+      openModal('無法取消',
+        `這堂課即將開始，距離上課時間已經不到 ${label}，超過時限無法自行取消，如需請假請直接聯繫老師。`,
+        async ()=>{}, '我知道了');
+      return;
+    }
+  }
+
+  openModal('取消預約',
+    `確定要取消 ${b.class_date} ${b.class_time}「${b.class_title}」嗎？取消後堂數將退還。`,
+    async ()=>{ await cancelBooking(bookingId); }, '確認取消');
+}
+
+/* ============ 預約 / 取消（實際寫入 Supabase） ============ */
+let isProcessingBooking = false; // 防止手滑連點造成重複預約/取消
+
+async function bookClass(c){
+  if(isProcessingBooking){ return; }
+  isProcessingBooking = true;
+  try{
+    const classStart = new Date(c.year, c.month-1, c.day, ...c.time.split(':').map(Number));
+    if(classStart <= new Date()){ showToast('這堂課已經開始，無法預約'); return; }
+    if(state.creditsRemaining<=0){ showToast('堂數不足，請先加購'); return; }
+    if(seatsBooked(c.classKey) >= c.cap){ showToast('此堂課已額滿'); return; }
+    if(state.myBookings.some(b=>b.class_key===c.classKey && b.status==='active')){ showToast('已經預約過這堂課囉'); return; }
+
+    const batchId = await consumeOneCredit(lineProfile.userId);
+    const newRemaining = state.creditsRemaining - 1;
+
+    const isoDate = `${c.year}-${String(c.month).padStart(2,'0')}-${String(c.day).padStart(2,'0')}`;
+    const { error: insertErr } = await db.from('bookings').insert({
+      line_user_id: lineProfile.userId,
+      class_key: c.classKey,
+      class_template_id: c.templateId,
+      class_title: c.title,
+      class_date: c.date,
+      class_date_iso: isoDate,
+      class_time: c.time,
+      teacher: c.teacher,
+      cap: c.cap,
+      status: 'active',
+      credit_batch_id: batchId
+    });
+    if(insertErr){
+      if(batchId) await refundOneCredit(lineProfile.userId, batchId); // 預約沒成功，把剛剛扣的批次退回去
+      if(insertErr.code === '23505'){
+        // 資料庫的防重複規則擋下來了（極少數手滑連點的情況）
+        showToast('已經預約過這堂課囉');
+      } else {
+        showToast('預約失敗，請稍後再試'); console.error(insertErr);
+      }
+      return;
+    }
+
+    await db.from('members').update({ remaining_credits: newRemaining }).eq('line_user_id', lineProfile.userId);
+    state.creditsRemaining = newRemaining;
+
+    await Promise.all([loadSeatsMap(), loadMyBookings()]);
+    render();
+    showToast(`已預約 ${c.date} ${c.time} ${c.title} ✓`);
+  } finally {
+    isProcessingBooking = false;
+  }
+}
+
+async function cancelBooking(bookingId){
+  if(isProcessingBooking){ return; } // 防止手滑連點兩下，重複退還堂數
+  isProcessingBooking = true;
+  try{
+    const b = state.myBookings.find(x=>x.id===bookingId);
+    if(!b) return;
+    if(b.status !== 'active'){ return; } // 已經是取消狀態了（例如上一次連點已經處理過），不要重複退還
+
+    const { data: updated, error } = await db.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId).eq('status', 'active').select('id');
+    if(error){ showToast('取消失敗，請稍後再試'); console.error(error); return; }
+    if(!updated || updated.length===0){ return; } // 這筆已經被取消過了（例如另一個分頁或連點造成的重複請求），不要重複退還堂數
+
+    if(b.credit_batch_id){
+      await refundOneCredit(lineProfile.userId, b.credit_batch_id); // 退回原本扣的那一批
+    }
+    const newRemaining = state.creditsRemaining + 1;
+    await db.from('members').update({ remaining_credits: newRemaining }).eq('line_user_id', lineProfile.userId);
+    state.creditsRemaining = newRemaining;
+
+    await Promise.all([loadSeatsMap(), loadMyBookings()]);
+    render();
+    showToast('已取消預約，堂數已退還');
+  } finally {
+    isProcessingBooking = false;
+  }
+}
+
+/* ============ 會員註冊 ============ */
+// 「新學員」的判斷依據：表單有沒有啟用、這個 LINE 帳號有沒有留下註冊資料
+// （state.registrationSubmittedAt）。如果後台把某位學員的註冊資料清掉，
+// 他下次打開就會被當成新學員，重新看到這個表單——這是刻意設計成這樣的。
+let isEditingProfile = false;
+let registrationSubmitting = false;
+let profileDirty = false;
+
+function needsRegistration(){
+  return state.registrationFormStatus==='published' && !state.registrationSubmittedAt;
+}
+
+function openRegistrationScreen(editing){
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('registrationScreen').style.display = 'flex';
+  profileDirty = false;
+  renderRegistrationForm(editing);
+}
+function closeRegistrationScreen(){
+  if(isEditingProfile && profileDirty){
+    showProfileSaveReminder();
+    return;
+  }
+  doCloseRegistration();
+}
+function doCloseRegistration(){
+  document.getElementById('registrationScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  profileDirty = false;
+  if(!isEditingProfile) maybeShowAnnouncement();
+}
+function showProfileSaveReminder(){
+  const ov = document.getElementById('profileReminderOverlay');
+  ov.classList.add('show');
+}
+function closeProfileReminder(){ document.getElementById('profileReminderOverlay').classList.remove('show'); }
+function profileReminderGoSave(){
+  closeProfileReminder();
+  const body = document.querySelector('.reg-body');
+  if(body){
+    const submit = body.querySelector('.reg-submit');
+    if(submit) submit.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+}
+function profileReminderLeave(){
+  closeProfileReminder();
+  doCloseRegistration();
+}
+
+// 跟後台「computeRegFieldOrder」用同一套邏輯：姓名／e-mail／生日／年紀／其他問題
+// 統一用同一份順序清單決定顯示順序，這樣後台調整過的順序，前台才會如實呈現。
+function computeFrontFieldOrder(){
+  const birthdayQ = state.registrationQuestions.find(q=>q.question==='生日');
+  const ageQ = state.registrationQuestions.find(q=>q.question==='年紀');
+  const otherQs = [...state.registrationQuestions].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const defaultOrder = [
+    'name',
+    ...(birthdayQ ? [`q_${birthdayQ.id}`] : []),
+    'contact',
+    ...(ageQ ? [`q_${ageQ.id}`] : []),
+    ...otherQs.filter(q=>q.question!=='生日' && q.question!=='年紀').map(q=>`q_${q.id}`)
+  ];
+  const validKeys = new Set(['name','contact', ...otherQs.map(q=>`q_${q.id}`)]);
+  const saved = Array.isArray(state.registrationFieldOrder) ? state.registrationFieldOrder : [];
+  if(saved.length===0) return defaultOrder;
+  let order = saved.filter(k=>validKeys.has(k));
+  const known = new Set(order);
+  defaultOrder.forEach(k=>{ if(!known.has(k)) order.push(k); });
+  return order;
+}
+function renderRegistrationFieldHTML(key){
+  if(key==='name'){
+    return state.registrationShowName ? `<div class="reg-field"><label>姓名${state.registrationNameRequired ? '<span class="req">*</span>' : ''}</label><input type="text" id="regName" placeholder="請輸入姓名" value="${state.registrationName||''}"></div>` : '';
+  }
+  if(key==='contact'){
+    return state.registrationShowContact ? `<div class="reg-field"><label>e-mail${state.registrationContactRequired ? '<span class="req">*</span>' : ''}</label><input type="email" id="regContact" placeholder="請輸入 e-mail" value="${state.registrationContact||''}"></div>` : '';
+  }
+  if(!key.startsWith('q_')) return '';
+  const q = state.registrationQuestions.find(x=>x.id===key.slice(2));
+  if(!q) return '';
+  if(q.type==='note'){
+    return isEditingProfile ? '' : `<div class="reg-note">${q.question}</div>`;
+  }
+  const existingAns = state.registrationAnswers ? state.registrationAnswers[q.id] : null;
+  return `
+  <div class="reg-field">
+    <label>${q.question}${q.required ? '<span class="req">*</span>' : ''}</label>
+    ${q.type==='choice' ? `
+      <div class="reg-choice">
+        ${(q.options||[]).map(o=>`<label><input type="radio" name="reg_${q.id}" value="${o}" ${existingAns===o?'checked':''}>${o}</label>`).join('')}
+      </div>` : q.type==='multichoice' ? `
+      <div class="reg-choice">
+        ${(q.options||[]).map(o=>`<label><input type="checkbox" name="reg_${q.id}" value="${o}" ${Array.isArray(existingAns) && existingAns.includes(o) ? 'checked':''}>${o}</label>`).join('')}
+      </div>` : q.type==='date' ? `
+      <input type="date" id="reg_${q.id}" value="${existingAns||''}">` : `
+      <input type="text" id="reg_${q.id}" placeholder="請輸入" value="${existingAns||''}">`
+    }
+  </div>`;
+}
+
+function renderRegistrationForm(editing){
+  isEditingProfile = editing;
+  document.getElementById('regTopbar').textContent = state.storeName;
+  const content = document.getElementById('registrationContent');
+  content.innerHTML = `
+    ${editing ? `<div class="reg-back"><span onclick="closeRegistrationScreen()">← 返回主畫面（如果有修改資料，記得下方按儲存變更）</span></div>` : ''}
+    <div class="reg-header">
+      <h2>${editing ? '我的會員資料' : '會員註冊'}</h2>
+      ${editing && state.editProfileNote ? `<p>${state.editProfileNote}</p>` : ''}
+    </div>
+    <div class="reg-body">
+      ${computeFrontFieldOrder().map(renderRegistrationFieldHTML).join('')}
+      <button class="reg-submit" onclick="submitRegistration()">${editing ? '儲存變更' : '送出'}</button>
+    </div>`;
+  if(editing){
+    content.addEventListener('input', ()=>{ profileDirty = true; }, { once: false });
+    content.addEventListener('change', ()=>{ profileDirty = true; }, { once: false });
+  }
+}
+
+async function submitRegistration(){
+  if(registrationSubmitting) return;
+  const nameEl = document.getElementById('regName');
+  const contactEl = document.getElementById('regContact');
+  const name = nameEl ? nameEl.value.trim() : (state.registrationName||'');
+  const contact = contactEl ? contactEl.value.trim() : (state.registrationContact||'');
+  if(state.registrationShowName && state.registrationNameRequired && !name){ showToast('請輸入姓名'); return; }
+  if(state.registrationShowContact && state.registrationContactRequired && !contact){ showToast('請輸入 e-mail'); return; }
+
+  const answers = {};
+  for(const q of state.registrationQuestions){
+    if(q.type==='note') continue; // 說明文字不是問題，不用收答案
+    let val = null;
+    if(q.type==='choice'){
+      const checked = document.querySelector(`input[name="reg_${q.id}"]:checked`);
+      val = checked ? checked.value : null;
+    } else if(q.type==='multichoice'){
+      const checkedEls = [...document.querySelectorAll(`input[name="reg_${q.id}"]:checked`)];
+      val = checkedEls.length ? checkedEls.map(el=>el.value) : null;
+    } else if(q.type==='date'){
+      const raw = document.getElementById(`reg_${q.id}`).value;
+      val = raw || null;
+    } else {
+      const raw = document.getElementById(`reg_${q.id}`).value.trim();
+      val = raw || null;
+    }
+    if(q.required && !val){ showToast(`請填寫「${q.question}」`); return; }
+    if(val) answers[q.id] = val;
+  }
+
+  registrationSubmitting = true;
+  try{
+    const nowIso = new Date().toISOString();
+    const { error } = await db.from('members').update({
+      registration_name: name,
+      registration_contact: contact,
+      registration_answers: answers,
+      registration_submitted_at: nowIso
+    }).eq('line_user_id', lineProfile.userId);
+    if(error){ showToast('送出失敗，請稍後再試'); console.error(error); return; }
+
+    state.registrationName = name;
+    state.registrationContact = contact;
+    state.registrationAnswers = answers;
+    state.registrationSubmittedAt = nowIso;
+    profileDirty = false;
+
+    const editing = isEditingProfile;
+    document.getElementById('registrationContent').innerHTML = `
+      <div class="reg-thanks">
+        <div class="icon">🎉</div>
+        <h3>${editing ? '資料已更新！' : '報名完成，謝謝你！'}</h3>
+        <p>${editing ? '你的會員資料已經儲存，之後隨時可以再點「會員資料設定」修改。' : '我們收到你的資料了，會再透過 LINE 跟你聯繫後續上課細節。'}</p>
+        <button class="reg-submit" style="margin-top:10px;" onclick="closeRegistrationScreen()">${editing ? '返回主畫面' : '開始使用'}</button>
+      </div>`;
+  } finally {
+    registrationSubmitting = false;
+  }
+}
+
+/* ============ 初始化 ============ */
+(async function init(){
+  try{
+    await initLiff();
+    await loadAll();
+    render();
+  }catch(e){
+    console.error('初始化過程發生錯誤：', e);
+    render();
+  }
+
+  document.getElementById('loadingScreen').style.display = 'none';
+
+  if(state.registrationFormStatus==='published'){
+    document.getElementById('regSettingsBtn').style.display = 'inline-block';
+  }
+
+  if(needsRegistration()){
+    openRegistrationScreen(false);
+  } else {
+    document.getElementById('app').style.display = 'flex';
+    maybeShowAnnouncement();
+  }
+
+  if(isDemoMode){
+    const badge = document.createElement('div');
+    badge.textContent = '⚠️ 示範模式（未偵測到 LINE 環境，顯示測試資料）';
+    badge.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c1503a;color:#fff;font-size:11px;text-align:center;padding:4px;z-index:99;';
+    document.body.prepend(badge);
+  }
+})();
+</script>
+</body>
+</html>
