@@ -60,7 +60,7 @@
   .class-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
   .class-card-wrap:has(.class-desc.open) .class-card{border-radius:14px 14px 0 0;}
   .info-btn{border:1px solid var(--line);background:var(--paper);color:var(--sage);border-radius:20px;font-size:11.5px;font-weight:600;padding:5px 12px;cursor:pointer;flex-shrink:0;white-space:nowrap;}
-  .class-desc{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease;background:var(--card);border:none;border-radius:0 0 14px 14px;padding:0 16px;font-size:12.5px;color:var(--muted);line-height:1.7;white-space:pre-wrap;}
+  .class-desc{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease;background:var(--card);border-radius:0 0 14px 14px;padding:0;font-size:12.5px;color:var(--muted);line-height:1.7;white-space:pre-wrap;border:none;}
   .class-desc.open{max-height:300px;padding:12px 16px;border:1px solid var(--line);border-top:none;}
   .class-info .time{font-size:15px;font-weight:700;color:var(--ink);}
   .class-info .meta{font-size:12.5px;color:var(--muted);margin-top:3px;}
@@ -70,6 +70,21 @@
   .seat-tag.low{background:var(--clay-light);color:var(--clay);}
   .seat-tag.full{background:#f3e4e0;color:var(--danger);}
 
+  .mine-sub-tabs{display:flex;gap:8px;margin-bottom:16px;}
+  .mine-sub-btn{flex:1;border:1px solid var(--line);background:var(--card);padding:8px 0;border-radius:10px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .2s;}
+  .mine-sub-btn.active{background:var(--sage);color:#fff;border-color:var(--sage);}
+  .completed-filter{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px;}
+  .cf-label{font-size:14px;font-weight:600;color:var(--ink);min-width:120px;text-align:center;}
+  .cf-arrow{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:16px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+  .cf-arrow:active{background:var(--sage-light);}
+  .cf-label{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;}
+  .month-picker{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;}
+  .mp-year-row{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px;}
+  .mp-year{font-size:15px;font-weight:700;color:var(--ink);min-width:80px;text-align:center;}
+  .mp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .mp-month{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 0;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;transition:all .15s;}
+  .mp-month.active{background:var(--sage);color:#fff;border-color:var(--sage);}
+  .mp-month:active{background:var(--sage-light);}
   .book-btn{border:none;padding:9px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform .1s;}
   .book-btn:active{transform:scale(0.96);}
   .book-btn.primary{background:var(--line-green);color:#fff;}
@@ -612,6 +627,33 @@ async function loadAll(){
     ensureMemberAndLoadCredits()
   ]);
   await Promise.all([ loadMyBookings(), loadMyCreditBatches() ]);
+  const _n = new Date();
+  const todayStr = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
+  const activeBatches = state.creditBatches.filter(b=>b.amount>0).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const usedBookings = state.myBookings.filter(bk=>bk.status==='active'||bk.status==='completed');
+  const batchIds = new Set(activeBatches.map(b=>b.id));
+  const assigned = {};
+  activeBatches.forEach(b=>{ assigned[b.id]=0; });
+  usedBookings.filter(bk=>bk.credit_batch_id && batchIds.has(bk.credit_batch_id))
+    .forEach(bk=>{ assigned[bk.credit_batch_id]++; });
+  const orphans = usedBookings.filter(bk=>!bk.credit_batch_id || !batchIds.has(bk.credit_batch_id));
+  for(const o of orphans){
+    const target = activeBatches.find(b=> b.amount - assigned[b.id] > 0);
+    if(target) assigned[target.id]++;
+  }
+  let totalRemaining = 0;
+  for(const b of activeBatches){
+    const correctRemaining = Math.max(0, b.amount - assigned[b.id]);
+    if(b.remaining !== correctRemaining){
+      await db.from('credit_batches').update({ remaining: correctRemaining }).eq('id', b.id);
+      b.remaining = correctRemaining;
+    }
+    if(!b.expires_at || b.expires_at >= todayStr) totalRemaining += correctRemaining;
+  }
+  if(totalRemaining !== state.creditsRemaining){
+    state.creditsRemaining = totalRemaining;
+    await db.from('members').update({ remaining_credits: totalRemaining }).eq('line_user_id', lineProfile.userId);
+  }
 }
 
 /* ============ 畫面渲染 ============ */
@@ -631,7 +673,9 @@ function classCardHTML(c){
   else if(remain<=3){ tagClass='low'; tagText=`剩 ${remain} 位，快滿囉`; }
 
   let btn;
-  if(hasStarted && !already){
+  if(already && hasStarted){
+    btn = `<button class="book-btn booked" disabled>已完成</button>`;
+  } else if(hasStarted && !already){
     btn = `<button class="book-btn disabled" disabled>已截止</button>`;
   } else if(already){
     btn = `<button class="book-btn booked" disabled>已預約 ✓</button>`;
@@ -748,16 +792,96 @@ function renderBookTab(){
   return html;
 }
 
+let mineSubTab = 'upcoming';
+let completedFilterYear = new Date().getFullYear();
+let completedFilterMonth = new Date().getMonth()+1;
+let showMonthPicker = false;
+function padTime(t){ if(!t) return ''; const p=t.split(':'); return p.map(s=>s.padStart(2,'0')).join(':'); }
+function changeCompletedMonth(delta){
+  completedFilterMonth += delta;
+  if(completedFilterMonth<1){ completedFilterMonth=12; completedFilterYear--; }
+  if(completedFilterMonth>12){ completedFilterMonth=1; completedFilterYear++; }
+  render();
+}
+function toggleMonthPicker(){ showMonthPicker=!showMonthPicker; render(); }
+function pickMonth(m){ completedFilterMonth=m; showMonthPicker=false; render(); }
+function changePickerYear(delta){ completedFilterYear+=delta; render(); }
 function renderMineTab(){
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const nowTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  const tabsHtml = `<div class="mine-sub-tabs">
+    <button class="mine-sub-btn${mineSubTab==='upcoming'?' active':''}" onclick="mineSubTab='upcoming';render()">已預約課程</button>
+    <button class="mine-sub-btn${mineSubTab==='completed'?' active':''}" onclick="mineSubTab='completed';render()">已完成課程</button>
+  </div>`;
+
+  if(mineSubTab==='completed'){
+    const monthStart = `${completedFilterYear}-${String(completedFilterMonth).padStart(2,'0')}-01`;
+    const daysInMonth = new Date(completedFilterYear, completedFilterMonth, 0).getDate();
+    const monthEnd = `${completedFilterYear}-${String(completedFilterMonth).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+    const done = state.myBookings
+      .filter(b => {
+        if(!b.class_date_iso) return false;
+        if(b.class_date_iso < monthStart || b.class_date_iso > monthEnd) return false;
+        if(b.status==='completed') return true;
+        if(b.status==='active'){
+          if(b.class_date_iso < todayIso) return true;
+          if(b.class_date_iso === todayIso && padTime(b.class_time) < nowTime) return true;
+        }
+        return false;
+      })
+      .map(b => ({ ...b, cls: state.allClasses.find(c => c.classKey===b.class_key) }))
+      .sort((a,b) => (b.class_date_iso||'').localeCompare(a.class_date_iso||'') || (b.class_time||'').localeCompare(a.class_time||''));
+    const months = [1,2,3,4,5,6,7,8,9,10,11,12];
+    const pickerHtml = showMonthPicker ? `<div class="month-picker">
+      <div class="mp-year-row">
+        <button class="cf-arrow" onclick="changePickerYear(-1)">‹</button>
+        <span class="mp-year">${completedFilterYear} 年</span>
+        <button class="cf-arrow" onclick="changePickerYear(1)">›</button>
+      </div>
+      <div class="mp-grid">${months.map(m=>
+        `<button class="mp-month${m===completedFilterMonth?' active':''}" onclick="pickMonth(${m})">${m} 月</button>`
+      ).join('')}</div>
+    </div>` : '';
+    const filterHtml = `<div class="completed-filter">
+      <button class="cf-arrow" onclick="changeCompletedMonth(-1)">‹</button>
+      <span class="cf-label" onclick="toggleMonthPicker()">${completedFilterYear} 年 ${completedFilterMonth} 月</span>
+      <button class="cf-arrow" onclick="changeCompletedMonth(1)">›</button>
+    </div>${pickerHtml}`;
+    if(done.length===0) return tabsHtml + filterHtml + `<div class="empty-state"><div class="icon">📭</div><div class="msg">這個月沒有已完成的課程</div></div>`;
+    let html = tabsHtml + filterHtml + `<div class="day-group">`;
+    done.forEach(b => {
+      const date = b.cls ? b.cls.date : (b.class_date || '');
+      const time = b.cls ? b.cls.time : (b.class_time || '');
+      const title = b.cls ? b.cls.title : (b.class_title || '');
+      const teacher = b.cls ? b.cls.teacher : (b.teacher || '');
+      const location = b.cls ? (b.cls.location||'') : '';
+      html += `
+        <div class="class-card" style="margin-bottom:10px;">
+          <div class="class-info">
+            <div class="time">${date}　${time}</div>
+            <div class="time">${title}</div>
+            <div class="meta"><span>👤 ${teacher} 老師</span></div>
+            ${location ? `<div class="meta"><span>📍${location}</span></div>` : ''}
+          </div>
+          <span class="book-btn booked" style="cursor:default;">已完成</span>
+        </div>`;
+    });
+    return html + `</div>`;
+  }
+
   const mine = state.myBookings
-    .filter(b => b.status==='active')
+    .filter(b => {
+      if(b.status!=='active' || !b.class_date_iso) return false;
+      if(b.class_date_iso > todayIso) return true;
+      if(b.class_date_iso < todayIso) return false;
+      return padTime(b.class_time) >= nowTime;
+    })
     .map(b => ({ ...b, cls: state.allClasses.find(c => c.classKey===b.class_key) }))
     .sort((a,b) => (a.class_date_iso||'').localeCompare(b.class_date_iso||'') || (a.class_time||'').localeCompare(b.class_time||''));
-
-  if(mine.length===0){
-    return `<div class="empty-state"><div class="icon">📭</div><div class="msg">目前沒有已預約的課程<br>去「預約課程」頁面挑一堂喜歡的吧</div></div>`;
-  }
-  let html = `<div class="day-group"><div class="day-title">已預約課程</div>`;
+  if(mine.length===0) return tabsHtml + `<div class="empty-state"><div class="icon">📭</div><div class="msg">目前沒有已預約的課程<br>去「預約課程」頁面挑一堂喜歡的吧</div></div>`;
+  let html = tabsHtml + `<div class="day-group">`;
   mine.forEach(b => {
     const date = b.cls ? b.cls.date : (b.class_date || '');
     const time = b.cls ? b.cls.time : (b.class_time || '');
@@ -775,8 +899,7 @@ function renderMineTab(){
         <button class="book-btn cancel" onclick="openCancelModal('${b.id}')">取消</button>
       </div>`;
   });
-  html += `</div>`;
-  return html;
+  return html + `</div>`;
 }
 
 function renderHistoryTab(){
@@ -1246,6 +1369,24 @@ async function submitRegistration(){
 (async function init(){
   try{
     await initLiff();
+  }catch(e){
+    console.error('LIFF 初始化失敗：', e);
+  }
+
+  if(isDemoMode){
+    document.getElementById('loadingScreen').style.display = 'none';
+    const block = document.createElement('div');
+    block.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:32px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+    block.innerHTML = `
+      <div style="font-size:48px;margin-bottom:16px;">💬</div>
+      <div style="font-size:18px;font-weight:700;color:#2d2a26;margin-bottom:8px;">請從 LINE 開啟</div>
+      <div style="font-size:14px;color:#8a8578;line-height:1.6;">這個預約系統需要透過 LINE 登入<br>請回到 LINE 聊天室，點擊預約連結開啟</div>
+    `;
+    document.body.appendChild(block);
+    return;
+  }
+
+  try{
     await loadAll();
     render();
   }catch(e){
@@ -1264,13 +1405,6 @@ async function submitRegistration(){
   } else {
     document.getElementById('app').style.display = 'flex';
     maybeShowAnnouncement();
-  }
-
-  if(isDemoMode){
-    const badge = document.createElement('div');
-    badge.textContent = '⚠️ 示範模式（未偵測到 LINE 環境，顯示測試資料）';
-    badge.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#c1503a;color:#fff;font-size:11px;text-align:center;padding:4px;z-index:99;';
-    document.body.prepend(badge);
   }
 })();
 </script>
