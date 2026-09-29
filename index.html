@@ -955,7 +955,7 @@ function renderCreditExpiryTab(){
           <div class="h-type">新增 ${b.amount} 堂</div>
           <div class="h-date">${expiryLabel}</div>
         </div>
-        <div class="h-type ${isExpired ? '' : 'plus'}" ${isExpired ? 'style="color:var(--muted)"' : ''}>剩 ${b.remaining} 堂</div>
+        <div class="h-type ${isExpired ? 'minus' : 'plus'}">剩 ${b.remaining} 堂</div>
       </div>`;
   });
   html += `</div>`;
